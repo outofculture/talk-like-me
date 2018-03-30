@@ -38,7 +38,7 @@ image_input = Input(shape=input_shape)
 encoded = Dense(1, activation=relu)(image_input)
 
 ####### Decode ########
-decoded = Dense(input_size, activation=sigmoid)(encoded)  # outputs (1103, 96)
+decoded = Dense(samples_per_window // 2, activation=sigmoid)(encoded)  # outputs (1103, 96)
 
 # UpSampling2D(size=(1, 10))()  # outputs (1, 30, 100)
 # Conv2D(filters=367, kernel_size=(1, 3), padding='same')()  # outputs (1, 30, 367)
@@ -56,46 +56,29 @@ autoencoder.compile(
     loss=categorical_crossentropy)
 
 
-def this_never_worked():
-    directory_listing = []  # TODO
-    chunked_files = []
-
-    for filename in directory_listing:
-        with open(filename) as the_file:
-            chunks = np.empty((1,) + input_shape)
-            samples = the_file.read()
-            file_len = len(samples)
-            assert file_len == sample_rate
-            for i in range(chunks.shape[1]):
-                start = i * samples_per_step
-                this_chunk = samples[start:start + samples_per_window]
-                chunks[0, i] = np.abs(fft(this_chunk))[:chunks.shape[2]]
-            chunked_files.append(chunks)
-    chunked_files = np.concatenate(chunked_files, axis=0)
-
-
 def shape_data_for_processing():
     data, labels = load_digits(sample_rate)
-    chunked_data = []
-    for spoken_word in data:
-        chunks = np.empty(input_shape)
-        for i in range(steps):
-            step_start = i * samples_per_step
+    chunked_data = np.empty((data.shape[0],) + input_shape)
+    for i in range(data.shape[0]):
+        spoken_word = data[i]
+        chunks = chunked_data[i]
+        for j in range(steps):
+            step_start = j * samples_per_step
             range_start = ceil(step_start - ((samples_per_window - samples_per_step) / 2))
             range_end = range_start + samples_per_window
             if range_start < 0 or range_end > sample_rate:
                 continue
-            chunks[i] = window * np.abs(fft(
+            chunks[j] = window * np.abs(fft(
                 spoken_word[range_start:range_end]))[:samples_per_window // 2]
-        chunked_data.append(chunks)
     # return np.concatenate(chunked_data)
     return chunked_data
 
 
-all_data = shape_data_for_processing()
-autoencoder.fit(all_data, all_data)
+if __name__ == '__main__':
+    all_data = shape_data_for_processing()
+    autoencoder.fit(all_data, all_data)
 
-prediction = autoencoder.predict(all_data)
-error = ((prediction - all_data) ** 2).mean() ** 0.5
-print(error)
-# TODO play back the prediction (avg the ffts?)
+    prediction = autoencoder.predict(all_data)
+    error = ((prediction - all_data) ** 2).mean() ** 0.5
+    print(error)
+    # TODO play back the prediction (avg the ffts?)
