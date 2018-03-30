@@ -1,3 +1,4 @@
+from functools import reduce
 from math import ceil
 
 import numpy as np
@@ -14,9 +15,12 @@ sample_rate = 8000
 lowest_freq = 20  # hz
 window_size = 1. / lowest_freq
 samples_per_window = ceil(sample_rate * window_size)
+window = np.hamming(samples_per_window // 2)
 samples_per_step = ceil(sample_rate * 0.01)
+steps = ceil(sample_rate / samples_per_step)
 
-input_shape = (96, 1103)
+input_shape = (steps, samples_per_window // 2)  # (108, sample_rate)
+input_size = reduce(lambda t, a: a * t, input_shape, 1)
 image_input = Input(shape=input_shape)
 
 ####### Encode ########
@@ -31,10 +35,10 @@ image_input = Input(shape=input_shape)
 # MaxPooling2D(pool_size=(1, 10))()  # outputs (1, 3, 100)
 
 # Compress with a fully-connected layer
-encoded = Dense((20,), activation=relu)(image_input)
+encoded = Dense(1, activation=relu)(image_input)
 
 ####### Decode ########
-decoded = Dense(input_shape, activation=sigmoid)(encoded)  # outputs (1103, 96)
+decoded = Dense(input_size, activation=sigmoid)(encoded)  # outputs (1103, 96)
 
 # UpSampling2D(size=(1, 10))()  # outputs (1, 30, 100)
 # Conv2D(filters=367, kernel_size=(1, 3), padding='same')()  # outputs (1, 30, 367)
@@ -70,11 +74,28 @@ def this_never_worked():
     chunked_files = np.concatenate(chunked_files, axis=0)
 
 
-data, labels = load_digits(sample_rate)
+def shape_data_for_processing():
+    data, labels = load_digits(sample_rate)
+    chunked_data = []
+    for spoken_word in data:
+        chunks = np.empty(input_shape)
+        for i in range(steps):
+            step_start = i * samples_per_step
+            range_start = ceil(step_start - ((samples_per_window - samples_per_step) / 2))
+            range_end = range_start + samples_per_window
+            if range_start < 0 or range_end > sample_rate:
+                continue
+            chunks[i] = window * np.abs(fft(
+                spoken_word[range_start:range_end]))[:samples_per_window // 2]
+        chunked_data.append(chunks)
+    # return np.concatenate(chunked_data)
+    return chunked_data
 
-autoencoder.fit(data, data)
 
-prediction = autoencoder.predict(data)
-error = ((prediction - data) ** 2).mean() ** 0.5
+all_data = shape_data_for_processing()
+autoencoder.fit(all_data, all_data)
+
+prediction = autoencoder.predict(all_data)
+error = ((prediction - all_data) ** 2).mean() ** 0.5
 print(error)
-# TODO play back the prediction
+# TODO play back the prediction (avg the ffts?)
