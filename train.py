@@ -6,9 +6,9 @@ from keras import Input, Model
 from keras.backend import categorical_crossentropy, sigmoid, relu
 from keras.layers import Dense
 from keras.optimizers import SGD
-from scipy.fftpack import fft
+from scipy.fftpack import fft, ifft
 
-from audio import load_digits
+from audio import load_digits, play_all, play
 
 sample_rate = 8000
 
@@ -36,6 +36,7 @@ image_input = Input(shape=input_shape)
 
 # Compress with a fully-connected layer
 encoded = Dense(1, activation=relu)(image_input)
+# TODO try not compressing the data at all
 
 ####### Decode ########
 decoded = Dense(samples_per_window // 2, activation=sigmoid)(encoded)  # outputs (1103, 96)
@@ -71,14 +72,43 @@ def shape_data_for_processing():
             chunks[j] = window * np.abs(fft(
                 spoken_word[range_start:range_end]))[:samples_per_window // 2]
     # return np.concatenate(chunked_data)
-    return chunked_data
+    return chunked_data, labels
+
+
+def shape_prediction_for_playing(prediction):
+    """
+    :param prediction: list of lists of ffts, each accounting for 50ms, offset by 10ms
+    :return: list of 8000-long sound samples
+    """
+    sounds = np.zeros((prediction.shape[0], sample_rate))
+    for i in range(prediction.shape[0]):
+        for j in range(prediction.shape[1] // 5):
+            sounds[i, j * samples_per_window:(j + 1) * samples_per_window] = np.abs(
+                ifft(np.concatenate((
+                    prediction[i, j * 5],
+                    np.flip(prediction[i, j * 5], 0),
+                ))))
+            # first_fft_that_applies = j - 2
+            # last_fft_that_applies = j + 2
+            # if first_fft_that_applies < 0:
+            #     first_fft_that_applies = 0
+            # if last_fft_that_applies >= prediction.shape[1]:
+            #     last_fft_that_applies = prediction.shape[1] - 1
+            # sounds[i, j * samples_per_step:(j + 1) * samples_per_step] = np.average(
+            #     np.abs(
+            #         ifft(prediction[i, first_fft_that_applies:last_fft_that_applies])),
+            #     axis=0,
+            # )[samples_per_step * 2:samples_per_step * 3]
+    return sounds
 
 
 if __name__ == '__main__':
-    all_data = shape_data_for_processing()
+    all_data, labels = shape_data_for_processing()
+    play(shape_prediction_for_playing(all_data)[0], sample_rate)
     autoencoder.fit(all_data, all_data)
 
     prediction = autoencoder.predict(all_data)
     error = ((prediction - all_data) ** 2).mean() ** 0.5
     print(error)
+    play_all(shape_prediction_for_playing(prediction), labels, sample_rate)
     # TODO play back the prediction (avg the ffts?)
