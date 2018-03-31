@@ -113,6 +113,6 @@ if __name__ == '__main__':
 
     prediction = autoencoder.predict(shaped_data)
     error = ((prediction - shaped_data) ** 2).mean() ** 0.5
-    print(error)
+    print('mean squared error: {}'.format(error))
     play_all(shape_prediction_for_playing(prediction), labels, sample_rate)
     # TODO play back the prediction (avg the ffts?)
