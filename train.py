@@ -58,26 +58,48 @@ autoencoder.compile(
 
 
 def shape_data_for_processing(data):
-    # TODO normalize the data? (subtract mean, divide by stdev)
-    return stft(data, sample_rate, nperseg=samples_per_window, noverlap=samples_per_step * 4)[2]
+    ffts = stft(
+        data,
+        sample_rate,
+        nperseg=samples_per_window,
+        noverlap=samples_per_step * 4,
+    )[2]
+    mean = ffts.mean()
+    centered_on_zero = ffts - mean
+    std_dev = np.abs(centered_on_zero).std()
+    normalized = centered_on_zero / std_dev
+
+    def denormalizer(processed_data):
+        return (processed_data * std_dev) + mean
+
+    return normalized, denormalizer
 
 
-def shape_prediction_for_playing(prediction):
+def shape_prediction_for_playing(prediction, denormalizer):
     """
     :param prediction: list of lists of ffts, each accounting for 50ms, offset by 10ms
+    :param denormalizer: function to de-normalize the data
     :return: list of 8000-long sound samples
     """
-    return istft(prediction, sample_rate, nperseg=samples_per_window, noverlap=samples_per_step * 4)[1]
+    return istft(
+        denormalizer(prediction),
+        sample_rate,
+        nperseg=samples_per_window,
+        noverlap=samples_per_step * 4,
+    )[1]
 
 
 if __name__ == '__main__':
     data, labels = load_digits(sample_rate)
-    shaped_data = shape_data_for_processing(data)
-    # play_all(shape_prediction_for_playing(shaped_data), labels, sample_rate)
+    shaped_data, denormalizer = shape_data_for_processing(data)
+    # play_all(shape_prediction_for_playing(shaped_data, denormalizer), labels, sample_rate)
+    # zeros = np.zeros(shaped_data.shape)
     autoencoder.fit(shaped_data, shaped_data)
+    # autoencoder.fit(zeros, zeros)
 
+    # prediction = autoencoder.predict(zeros)
     prediction = autoencoder.predict(shaped_data)
     error = ((prediction - shaped_data) ** 2).mean() ** 0.5
     print('mean squared error: {}'.format(error))
-    play_all(shape_prediction_for_playing(prediction), labels, sample_rate)
+    play_all(shape_prediction_for_playing(prediction, denormalizer), labels, sample_rate)
     # TODO play back the prediction (avg the ffts?)
