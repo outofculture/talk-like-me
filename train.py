@@ -19,7 +19,10 @@ window = np.hamming(samples_per_window // 2)
 samples_per_step = ceil(sample_rate * 0.01)
 steps = ceil(sample_rate / samples_per_step)
 
-input_shape = ((samples_per_window // 2) + 1, (sample_rate // samples_per_step) + 1)
+input_shape = (
+    (samples_per_window // 2) + 1,
+    ((sample_rate // samples_per_step) + 1) * 2,
+)
 input_size = reduce(lambda t, a: a * t, input_shape, 1)
 image_input = Input(shape=input_shape)
 
@@ -64,35 +67,30 @@ def shape_data_for_processing(data):
         nperseg=samples_per_window,
         noverlap=samples_per_step * 4,
     )[2]
-    mean = ffts.mean()
-    centered_on_zero = ffts - mean
-    std_dev = np.abs(centered_on_zero).std()
-    normalized = centered_on_zero / std_dev
+    coefs_only = np.dstack((ffts.real, ffts.imag))
+    mean = coefs_only.mean()
+    centered_on_zero = coefs_only - mean
+    the_max = np.abs(centered_on_zero).max()
+    normalized = centered_on_zero / the_max
 
-    def denormalizer(processed_data):
-        return (processed_data * std_dev) + mean
+    def deshaper(processed_data):
+        denormalized = (processed_data * the_max) + mean
+        result = np.empty(ffts.shape, dtype=complex)
+        result.real, result.imag = np.dsplit(denormalized, 2)
+        return istft(
+            result,
+            sample_rate,
+            nperseg=samples_per_window,
+            noverlap=samples_per_step * 4,
+        )[1]
 
-    return normalized, denormalizer
-
-
-def shape_prediction_for_playing(prediction, denormalizer):
-    """
-    :param prediction: list of lists of ffts, each accounting for 50ms, offset by 10ms
-    :param denormalizer: function to de-normalize the data
-    :return: list of 8000-long sound samples
-    """
-    return istft(
-        denormalizer(prediction),
-        sample_rate,
-        nperseg=samples_per_window,
-        noverlap=samples_per_step * 4,
-    )[1]
+    return normalized, deshaper
 
 
 if __name__ == '__main__':
     data, labels = load_digits(sample_rate)
-    shaped_data, denormalizer = shape_data_for_processing(data)
-    # play_all(shape_prediction_for_playing(shaped_data, denormalizer), labels, sample_rate)
+    shaped_data, deshaper = shape_data_for_processing(data)
+    # play_all(deshaper(shaped_data), labels, sample_rate)
     # zeros = np.zeros(shaped_data.shape)
     autoencoder.fit(shaped_data, shaped_data)
     # autoencoder.fit(zeros, zeros)
@@ -101,5 +99,4 @@ if __name__ == '__main__':
     prediction = autoencoder.predict(shaped_data)
     error = ((prediction - shaped_data) ** 2).mean() ** 0.5
     print('mean squared error: {}'.format(error))
-    play_all(shape_prediction_for_playing(prediction, denormalizer), labels, sample_rate)
-    # TODO play back the prediction (avg the ffts?)
+    play_all(deshaper(prediction), labels, sample_rate)
