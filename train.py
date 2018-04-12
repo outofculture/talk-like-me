@@ -1,5 +1,6 @@
 from functools import reduce
 from math import ceil
+from comet_ml import Experiment
 
 import numpy as np
 from keras import Input, Model
@@ -38,8 +39,8 @@ image_input = Input(shape=input_shape)
 # MaxPooling2D(pool_size=(1, 10))()  # outputs (1, 3, 100)
 
 # Compress with a fully-connected layer
+# encoded = Dense(input_shape[1], activation=relu)(image_input)
 encoded = Dense(32, activation=relu)(image_input)
-# TODO try not compressing the data at all
 
 ####### Decode ########
 decoded = Dense(input_shape[1], activation=sigmoid)(encoded)
@@ -72,9 +73,10 @@ def shape_data_for_processing(data):
     centered_on_zero = coefs_only - mean
     the_max = np.abs(centered_on_zero).max()
     normalized = centered_on_zero / the_max
+    normalized = (normalized + 1) / 2
 
     def deshaper(processed_data):
-        denormalized = (processed_data * the_max) + mean
+        denormalized = (((processed_data * 2) - 1) * the_max) + mean
         result = np.empty(ffts.shape, dtype=complex)
         result.real, result.imag = np.dsplit(denormalized, 2)
         return istft(
@@ -99,4 +101,4 @@ if __name__ == '__main__':
     prediction = autoencoder.predict(shaped_data)
     error = ((prediction - shaped_data) ** 2).mean() ** 0.5
     print('mean squared error: {}'.format(error))
-    play_all(deshaper(prediction), labels, sample_rate)
+    # play_all(deshaper(prediction), labels, sample_rate)
