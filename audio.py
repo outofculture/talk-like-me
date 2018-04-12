@@ -3,10 +3,14 @@ from __future__ import division
 import gzip
 import os
 import wave
+from functools import reduce
+from math import ceil
 
 import numpy as np
 import pyaudio
 import scipy.signal
+from keras import Input
+from scipy.signal import stft, istft
 
 
 def load_digits(sample_rate=8000.):
@@ -34,7 +38,7 @@ def load_digits(sample_rate=8000.):
         data = data[:cropped_size].reshape(n_digits, digit_size)
 
         # fade in/out to get rid of poppyclicks
-        ramp = np.linspace(0, 1, 0.05 * sample_rate)
+        ramp = np.linspace(0, 1, int(0.05 * sample_rate))
         data[:, :len(ramp)] *= ramp[None, :]
         data[:, -len(ramp):] *= ramp[None, ::-1]
 
@@ -84,8 +88,50 @@ def play_all(data, labels, sample_rate):
         play(data[i], sample_rate)
 
 
+sample_rate = 8000
+lowest_freq = 20  # hz
+window_size = 1. / lowest_freq
+samples_per_window = int(ceil(sample_rate * window_size))
+window = np.hamming(samples_per_window // 2)
+samples_per_step = int(ceil(sample_rate * 0.01))
+steps = ceil(sample_rate / samples_per_step)
+input_shape = (
+    (samples_per_window // 2) + 1,
+    ((sample_rate // samples_per_step) + 1) * 2,
+)
+input_size = reduce(lambda t, a: a * t, input_shape, 1)
+image_input = Input(shape=input_shape)
+
+
+def shape_data_for_processing(data):
+    ffts = stft(
+        data,
+        sample_rate,
+        nperseg=samples_per_window,
+        noverlap=samples_per_step * 4,
+    )[2]
+    coefs_only = np.dstack((ffts.real, ffts.imag))
+    mean = coefs_only.mean()
+    centered_on_zero = coefs_only - mean
+    the_max = np.abs(centered_on_zero).max()
+    normalized = centered_on_zero / the_max
+    normalized = (normalized + 1) / 2
+
+    def deshaper(processed_data):
+        denormalized = (((processed_data * 2) - 1) * the_max) + mean
+        result = np.empty(ffts.shape, dtype=complex)
+        result.real, result.imag = np.dsplit(denormalized, 2)
+        return istft(
+            result,
+            sample_rate,
+            nperseg=samples_per_window,
+            noverlap=samples_per_step * 4,
+        )[1]
+
+    return normalized, deshaper
+
+
 if __name__ == '__main__':
-    sample_rate = 8000
     data, labels = load_digits(sample_rate)
 
     # randomize the order

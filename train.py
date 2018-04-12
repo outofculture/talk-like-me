@@ -1,31 +1,18 @@
-from functools import reduce
-from math import ceil
 from comet_ml import Experiment
 
-import numpy as np
-from keras import Input, Model
+from keras import Model
 from keras.backend import categorical_crossentropy, sigmoid, relu
 from keras.layers import Dense
 from keras.optimizers import SGD
-from scipy.signal import stft, istft
 
-from audio import load_digits, play_all
+from audio import load_digits, sample_rate, input_shape, image_input, \
+    shape_data_for_processing
 
-sample_rate = 8000
-
-lowest_freq = 20  # hz
-window_size = 1. / lowest_freq
-samples_per_window = ceil(sample_rate * window_size)
-window = np.hamming(samples_per_window // 2)
-samples_per_step = ceil(sample_rate * 0.01)
-steps = ceil(sample_rate / samples_per_step)
-
-input_shape = (
-    (samples_per_window // 2) + 1,
-    ((sample_rate // samples_per_step) + 1) * 2,
-)
-input_size = reduce(lambda t, a: a * t, input_shape, 1)
-image_input = Input(shape=input_shape)
+try:
+    from local_settings import COMET_API_KEY
+    experiment = Experiment(api_key=COMET_API_KEY, project_name="talk-like-me")
+except ImportError:
+    experiment = None
 
 ####### Encode ########
 
@@ -59,35 +46,6 @@ autoencoder = Model(image_input, decoded)
 autoencoder.compile(
     optimizer=SGD(lr=0.01, momentum=0.9, nesterov=True),
     loss=categorical_crossentropy)
-
-
-def shape_data_for_processing(data):
-    ffts = stft(
-        data,
-        sample_rate,
-        nperseg=samples_per_window,
-        noverlap=samples_per_step * 4,
-    )[2]
-    coefs_only = np.dstack((ffts.real, ffts.imag))
-    mean = coefs_only.mean()
-    centered_on_zero = coefs_only - mean
-    the_max = np.abs(centered_on_zero).max()
-    normalized = centered_on_zero / the_max
-    normalized = (normalized + 1) / 2
-
-    def deshaper(processed_data):
-        denormalized = (((processed_data * 2) - 1) * the_max) + mean
-        result = np.empty(ffts.shape, dtype=complex)
-        result.real, result.imag = np.dsplit(denormalized, 2)
-        return istft(
-            result,
-            sample_rate,
-            nperseg=samples_per_window,
-            noverlap=samples_per_step * 4,
-        )[1]
-
-    return normalized, deshaper
-
 
 if __name__ == '__main__':
     data, labels = load_digits(sample_rate)
