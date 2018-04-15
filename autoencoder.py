@@ -1,12 +1,12 @@
 from comet_ml import Experiment
 
-from keras import Model
-from keras.backend import categorical_crossentropy, sigmoid, relu
+from keras import Model, Input
+from keras.backend import categorical_crossentropy, sigmoid, relu, binary_crossentropy
 from keras.layers import Dense
 from keras.optimizers import SGD
 
 from audio import load_digits, sample_rate, input_shape, image_input, \
-    shape_data_for_processing
+    shape_data_for_processing, flattened_input_shape
 
 try:
     from local_settings import COMET_API_KEY
@@ -27,10 +27,11 @@ except ImportError:
 
 # Compress with a fully-connected layer
 # encoded = Dense(input_shape[1], activation=relu)(image_input)
-encoded = Dense(32, activation=relu)(image_input)
+encoding_dim = 189
+encoded = Dense(encoding_dim, activation=relu)(image_input)
 
 ####### Decode ########
-decoded = Dense(input_shape[1], activation=sigmoid)(encoded)
+decoded = Dense(flattened_input_shape, activation=sigmoid)(encoded)
 
 # UpSampling2D(size=(1, 10))()  # outputs (1, 30, 100)
 # Conv2D(filters=367, kernel_size=(1, 3), padding='same')()  # outputs (1, 30, 367)
@@ -41,18 +42,31 @@ decoded = Dense(input_shape[1], activation=sigmoid)(encoded)
 # Conv2D(filters=1, kernel_size=(what))()
 
 autoencoder = Model(image_input, decoded)
-# encoder = Model(image_input, encoded)
+encoder = Model(image_input, encoded)
+encoded_input = Input(shape=(encoding_dim,))
+decoder_layer = autoencoder.layers[-1]
+decoder = Model(encoded_input, decoder_layer(encoded_input))
 
 autoencoder.compile(
+    # optimizer='adadelta',
+    # loss='mean_squared_error',
+    # loss=binary_crossentropy,
     optimizer=SGD(lr=0.01, momentum=0.9, nesterov=True),
-    loss=categorical_crossentropy)
+    loss=categorical_crossentropy,
+)
 
 if __name__ == '__main__':
     data, labels = load_digits(sample_rate)
     shaped_data, deshaper = shape_data_for_processing(data)
     # play_all(deshaper(shaped_data), labels, sample_rate)
     # zeros = np.zeros(shaped_data.shape)
-    autoencoder.fit(shaped_data, shaped_data)
+    autoencoder.fit(
+        shaped_data, shaped_data,
+        shuffle=True,
+        batch_size=3,
+        epochs=5,
+        # validation_data=(shaped_data, shaped_data),
+    )
     # autoencoder.fit(zeros, zeros)
 
     # prediction = autoencoder.predict(zeros)

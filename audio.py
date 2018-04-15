@@ -99,8 +99,8 @@ input_shape = (
     (samples_per_window // 2) + 1,
     ((sample_rate // samples_per_step) + 1) * 2,
 )
-input_size = reduce(lambda t, a: a * t, input_shape, 1)
-image_input = Input(shape=input_shape)
+flattened_input_shape = reduce(lambda t, a: a * t, input_shape, 1)
+image_input = Input(shape=(flattened_input_shape,))
 
 
 def shape_data_for_processing(data):
@@ -114,11 +114,13 @@ def shape_data_for_processing(data):
     mean = coefs_only.mean()
     centered_on_zero = coefs_only - mean
     the_max = np.abs(centered_on_zero).max()
-    normalized = centered_on_zero / the_max
-    normalized = (normalized + 1) / 2
+    normalized_on_zero = centered_on_zero / the_max
+    normalized_between_zero_and_one = (normalized_on_zero + 1) / 2
+    flattened = normalized_between_zero_and_one.reshape((ffts.shape[0], flattened_input_shape))
 
     def deshaper(processed_data):
-        denormalized = (((processed_data * 2) - 1) * the_max) + mean
+        expanded = processed_data.reshape((ffts.shape[0],) + input_shape)
+        denormalized = (((expanded * 2) - 1) * the_max) + mean
         result = np.empty(ffts.shape, dtype=complex)
         result.real, result.imag = np.dsplit(denormalized, 2)
         return istft(
@@ -128,7 +130,7 @@ def shape_data_for_processing(data):
             noverlap=samples_per_step * 4,
         )[1]
 
-    return normalized, deshaper
+    return flattened, deshaper
 
 
 if __name__ == '__main__':
