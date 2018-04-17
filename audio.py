@@ -103,7 +103,7 @@ flattened_input_shape = reduce(lambda t, a: a * t, input_shape, 1)
 image_input = Input(shape=(flattened_input_shape,))
 
 
-def shape_data_for_processing(data):
+def audio_data_to_windows_of_normalized_ffts(data):
     ffts = stft(
         data,
         sample_rate,
@@ -116,11 +116,9 @@ def shape_data_for_processing(data):
     the_max = np.abs(centered_on_zero).max()
     normalized_on_zero = centered_on_zero / the_max
     normalized_between_zero_and_one = (normalized_on_zero + 1) / 2
-    flattened = normalized_between_zero_and_one.reshape((ffts.shape[0], flattened_input_shape))
 
     def deshaper(processed_data):
-        expanded = processed_data.reshape((ffts.shape[0],) + input_shape)
-        denormalized = (((expanded * 2) - 1) * the_max) + mean
+        denormalized = (((processed_data * 2) - 1) * the_max) + mean
         result = np.empty(ffts.shape, dtype=complex)
         result.real, result.imag = np.dsplit(denormalized, 2)
         return istft(
@@ -130,7 +128,18 @@ def shape_data_for_processing(data):
             noverlap=samples_per_step * 4,
         )[1]
 
-    return flattened, deshaper
+    return normalized_between_zero_and_one, deshaper
+
+
+def audio_data_to_flattened_normalized_ffts(data):
+    normalized_between_zero_and_one, deshaper = audio_data_to_windows_of_normalized_ffts(data)
+    flattened = normalized_between_zero_and_one.reshape((data.shape[0], flattened_input_shape))
+
+    def deflatten_and_deshape(processed_data):
+        expanded = processed_data.reshape((data.shape[0],) + input_shape)
+        return deshaper(expanded)
+
+    return flattened, deflatten_and_deshape
 
 
 if __name__ == '__main__':

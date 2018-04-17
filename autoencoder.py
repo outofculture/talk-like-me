@@ -6,7 +6,7 @@ from keras.layers import Dense
 from keras.optimizers import SGD
 
 from audio import load_digits, sample_rate, input_shape, image_input, \
-    shape_data_for_processing, flattened_input_shape
+    play_all, flattened_input_shape, audio_data_to_flattened_normalized_ffts
 
 try:
     from local_settings import COMET_API_KEY
@@ -57,14 +57,14 @@ autoencoder.compile(
 
 if __name__ == '__main__':
     data, labels = load_digits(sample_rate)
-    shaped_data, deshaper = shape_data_for_processing(data)
+    shaped_data, deshaper = audio_data_to_flattened_normalized_ffts(data)
     # play_all(deshaper(shaped_data), labels, sample_rate)
     # zeros = np.zeros(shaped_data.shape)
     autoencoder.fit(
         shaped_data, shaped_data,
         shuffle=True,
         batch_size=3,
-        epochs=5,
+        epochs=3,
         # validation_data=(shaped_data, shaped_data),
     )
     # autoencoder.fit(zeros, zeros)
