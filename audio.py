@@ -13,7 +13,7 @@ from keras import Input
 from scipy.signal import stft, istft
 
 
-def load_digits(sample_rate=8000.):
+def load_digits(sample_rate=8000., validation=False):
     cache_file = 'digits_%dkHz.npy' % (sample_rate // 1000)
     if not os.path.exists(cache_file):
         print("Resampling to %d kHz..." % (sample_rate // 1000))
@@ -57,7 +57,10 @@ def load_digits(sample_rate=8000.):
         data[i] = data[i + 10]
 
     labels = np.arange(2, 2 + data.shape[0]) % 10
-    return data, labels
+    if validation:
+        return data[:-20], labels[:-20], data[-20:], labels[-20:]
+    else:
+        return data, labels
 
 
 pyaudio_handle = None
@@ -99,8 +102,9 @@ input_shape = (
     (samples_per_window // 2) + 1,
     ((sample_rate // samples_per_step) + 1) * 2,
 )
+fft_audio_input = Input(shape=input_shape)
 flattened_input_shape = reduce(lambda t, a: a * t, input_shape, 1)
-image_input = Input(shape=(flattened_input_shape,))
+flattened_audio_input = Input(shape=(flattened_input_shape,))
 
 
 def audio_data_to_windows_of_normalized_ffts(data):

@@ -5,7 +5,7 @@ from keras.backend import categorical_crossentropy, sigmoid, relu, binary_crosse
 from keras.layers import Dense
 from keras.optimizers import SGD
 
-from audio import load_digits, sample_rate, input_shape, image_input, \
+from audio import load_digits, sample_rate, input_shape, flattened_audio_input, \
     play_all, flattened_input_shape, audio_data_to_flattened_normalized_ffts
 
 try:
@@ -28,7 +28,7 @@ except ImportError:
 # Compress with a fully-connected layer
 # encoded = Dense(input_shape[1], activation=relu)(image_input)
 encoding_dim = 189
-encoded = Dense(encoding_dim, activation=relu)(image_input)
+encoded = Dense(encoding_dim, activation=relu)(flattened_audio_input)
 
 ####### Decode ########
 decoded = Dense(flattened_input_shape, activation=sigmoid)(encoded)
@@ -41,8 +41,8 @@ decoded = Dense(flattened_input_shape, activation=sigmoid)(encoded)
 
 # Conv2D(filters=1, kernel_size=(what))()
 
-autoencoder = Model(image_input, decoded)
-encoder = Model(image_input, encoded)
+autoencoder = Model(flattened_audio_input, decoded)
+encoder = Model(flattened_audio_input, encoded)
 encoded_input = Input(shape=(encoding_dim,))
 decoder_layer = autoencoder.layers[-1]
 decoder = Model(encoded_input, decoder_layer(encoded_input))
