@@ -1,3 +1,4 @@
+import numpy as np
 from comet_ml import Experiment
 
 from keras import Model, Input
@@ -71,6 +72,7 @@ if __name__ == '__main__':
 
     # prediction = autoencoder.predict(zeros)
     prediction = autoencoder.predict(shaped_data)
-    error = ((prediction - shaped_data) ** 2).mean() ** 0.5
-    print('mean squared error: {}'.format(error))
+    difference = prediction - shaped_data
+    error = (difference ** 2).mean() ** 0.5
+    print('mean squared error: {}\nworst error: {}'.format(error, np.abs(difference).max()))
     # play_all(deshaper(prediction), labels, sample_rate)
