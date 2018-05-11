@@ -57,7 +57,7 @@ autoencoder.compile(
 )
 
 if __name__ == '__main__':
-    data, labels = load_digits(sample_rate)
+    data, labels = load_digits(sample_rate, random=True)
     shaped_data, deshaper = audio_data_to_flattened_normalized_ffts(data)
     # play_all(deshaper(shaped_data), labels, sample_rate)
     # zeros = np.zeros(shaped_data.shape)

@@ -12,8 +12,10 @@ import scipy.signal
 from keras import Input
 from scipy.signal import stft, istft
 
+from utils import sliding_window
 
-def load_digits(sample_rate=8000., validation=False):
+
+def load_digits(sample_rate=8000., validation=False, random=False):
     cache_file = 'digits_%dkHz.npy' % (sample_rate // 1000)
     if not os.path.exists(cache_file):
         print("Resampling to %d kHz..." % (sample_rate // 1000))
@@ -57,6 +59,14 @@ def load_digits(sample_rate=8000., validation=False):
         data[i] = data[i + 10]
 
     labels = np.arange(2, 2 + data.shape[0]) % 10
+
+    if random:
+        # randomize the order
+        order = np.arange(len(data))
+        np.random.shuffle(order)
+        data = data[order]
+        labels = labels[order]
+
     if validation:
         return data[:-20], labels[:-20], data[-20:], labels[-20:]
     else:
@@ -107,6 +117,24 @@ flattened_input_shape = reduce(lambda t, a: a * t, input_shape, 1)
 flattened_audio_input = Input(shape=(flattened_input_shape,))
 
 
+def audio_data_to_expectation_of_next_sample(data, labels):
+    orig_type = data.dtype
+    data_max = data.max()
+    data = data / data_max
+    expectations = data
+    window_size = 512
+    padding = np.zeros((data.shape[0], window_size), dtype=data.dtype)
+    data = np.concatenate((padding, data), axis=1)
+
+    def denormalize(normalized_data):
+        return (normalized_data * data_max).astype(orig_type)
+
+    chunks = sliding_window(data, size=window_size)[:, :-1]  # drop the last one, which has no prediction
+    # todo include the label data somehow
+    # todo maybe also include the index of the next sample?
+    return chunks, expectations, denormalize
+
+
 def audio_data_to_windows_of_normalized_ffts(data):
     ffts = stft(
         data,
@@ -147,13 +175,9 @@ def audio_data_to_flattened_normalized_ffts(data):
 
 
 if __name__ == '__main__':
-    data, labels = load_digits(sample_rate)
+    data, labels = load_digits(sample_rate, random=True)
 
-    # randomize the order
-    order = np.arange(len(data))
-    np.random.shuffle(order)
-    data = data[order]
-    labels = labels[order]
+    chunks, expectations, deshaper = audio_data_to_expectation_of_next_sample(data, labels)
 
     # play(data[0], sample_rate)
     # play_all(data, labels, sample_rate)
