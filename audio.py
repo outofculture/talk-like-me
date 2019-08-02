@@ -192,6 +192,20 @@ def audio_data_to_flattened_normalized_ffts(data):
     return flattened, deflatten_and_deshape
 
 
+def reduce_audio_data_fidelity(data, quantization_steps=256):
+    data_max = (1 << 15) - 1
+    data = data / data_max
+    # mu-law companding transformation (ITU-T, 1988)
+    mu = quantization_steps - 1
+    data = np.sign(data) * np.log(1 + mu * np.absolute(data)) / np.log(1 + mu)
+
+    def deshaper(processed_data):
+        return processed_data * 65535
+
+    # quantize
+    return (np.clip(data * 0.5 + 0.5, 0, 1) * mu).astype(np.int32), deshaper
+
+
 if __name__ == '__main__':
     data, labels = load_digits(sample_rate, random=True)
 

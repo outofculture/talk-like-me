@@ -30,21 +30,21 @@ class Autoencoder(nn.Module):
 
 def normalize(x):
     shape = (1,) * (x.ndim - 1) + (2,)
-    mean = np.array([x[...,i].mean() for i in (0,1)]).reshape(shape)
-    stdev = np.array([x[...,i].std() for i in (0,1)]).reshape(shape)
+    mean = np.array([x[..., i].mean() for i in (0, 1)]).reshape(shape)
+    stdev = np.array([x[..., i].std() for i in (0, 1)]).reshape(shape)
 
     def denormalize(x):
         return (x * stdev) + mean
-    
+
     return (x - mean) / stdev, denormalize
 
 
 def complex_to_polar(x):
-    return np.concatenate([np.abs(x)[...,None], np.angle(x)[...,None]], axis=x.ndim)
+    return np.concatenate([np.abs(x)[..., None], np.angle(x)[..., None]], axis=x.ndim)
 
 
 def polar_to_complex(x):
-    return x[...,0] * np.exp(1j*x[...,1])
+    return x[..., 0] * np.exp(1j * x[..., 1])
 
 
 def prepare_data(x):
@@ -56,7 +56,7 @@ def prepare_data(x):
     def unprepare(x):
         untrans = x.transpose(0, 2, 3, 1)
         denormed = denorm(untrans)
-        audio = [spectrogram_to_audio(polar_to_complex(spec))[None,...] for spec in denormed]
+        audio = [spectrogram_to_audio(polar_to_complex(spec))[None, ...] for spec in denormed]
         return np.concatenate(audio, axis=0)
 
     return transposed, unprepare
@@ -91,5 +91,3 @@ if __name__ == '__main__':
             optimizer.step()
 
         print(loss.data)
-
-    
