@@ -101,7 +101,7 @@ def play_all(data, labels, sample_rate):
         play(data[i], sample_rate)
 
 
-sample_rate = 8000
+sample_rate = 16000
 lowest_freq = 20  # hz
 window_size = 1. / lowest_freq
 samples_per_window = int(ceil(sample_rate * window_size))
@@ -161,6 +161,24 @@ def audio_data_to_windows_of_normalized_ffts(data):
         )[1]
 
     return normalized_between_zero_and_one, deshaper
+
+
+def audio_to_spectrogram(data):
+    return stft(
+        data,
+        sample_rate,
+        nperseg=samples_per_window,
+        noverlap=samples_per_step * 4,
+    )[2]
+
+
+def spectrogram_to_audio(data):
+    return istft(
+        data,
+        sample_rate,
+        nperseg=samples_per_window,
+        noverlap=samples_per_step * 4,
+    )[1]
 
 
 def audio_data_to_flattened_normalized_ffts(data):
